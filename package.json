@@ -1,0 +1,44 @@
+{
+  "name": "provatsoft-vendor-receipt",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.1.0",
+    "@react-pdf/renderer": "^3.1.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "framer-motion": "^11.0.0",
+    "jose": "^5.0.0",
+    "lucide-react": "^0.489.0",
+    "next": "^15.5.19",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-hook-form": "^7.45.0",
+    "resend": "^6.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/qrcode": "^1.5.1",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.19",
+    "clsx": "^2.1.1",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^15.5.19",
+    "postcss": "8.5.10",
+    "qrcode": "^1.5.1",
+    "tailwind-merge": "^1.14.0",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.6.2"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
+  }
+}

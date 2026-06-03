@@ -55,8 +55,9 @@ Complete.
 - Upstream branch: `origin/main`
 - Push command: `git push -u origin main`
 - Push result: success.
-- Pushed commit hash: `29a3a724c352dc75384d7a36de3dd298cfc01f86`
-- Remote branch verification: `origin/main` points to `29a3a724c352dc75384d7a36de3dd298cfc01f86`.
+- Initial pushed commit hash: `29a3a724c352dc75384d7a36de3dd298cfc01f86`
+- Final pushed commit hash: verify with `git rev-parse origin/main`; the report commit itself changes the branch hash when updated.
+- Remote branch verification: `origin/main` matched local `HEAD` after the final push.
 - Repository visibility: public; no-credential `git ls-remote` succeeded for `refs/heads/main`.
 - Remaining permission issues: none observed after collaborator access was granted.
 

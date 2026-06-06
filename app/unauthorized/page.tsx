@@ -13,8 +13,8 @@ export default function UnauthorizedPage() {
 
           {/* Description */}
           <div className="space-y-3 text-slate-400">
-            <p>You don't have permission to access this resource.</p>
-            <p className="text-sm">Your current role doesn't grant access to this dashboard or feature.</p>
+            <p>You do not have permission to access this resource.</p>
+            <p className="text-sm">Your current role does not grant access to this dashboard or feature.</p>
           </div>
 
           {/* Action Buttons */}

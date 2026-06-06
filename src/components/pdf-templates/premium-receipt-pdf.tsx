@@ -358,7 +358,7 @@ export function PremiumReceiptPdf({ draft, watermarkUrl, qrCodeUrl, design }: Pr
                           <Text style={{ color: '#1d4ed8', fontWeight: 700, marginLeft: 6 }}>{safeText(draft.gender)}</Text>
                         </View>
                         <View style={{ display: 'flex', flexDirection: 'row', alignItems: 'baseline', marginTop: 7 }}>
-                          <Text style={[styles.small, { color: '#0f172a' }]}>Father\'s Name :</Text>
+                          <Text style={[styles.small, { color: '#0f172a' }]}>Father&apos;s Name :</Text>
                           <Text style={{ color: '#1d4ed8', fontWeight: 700, marginLeft: 6 }}>{safeText(draft.fatherName)}</Text>
                         </View>
                       </View>

@@ -12,8 +12,8 @@ export async function getPdfComponentAsync(slug: ReceiptTemplateId | string) {
   // Lazy load on first use
   if (!getPdfComponentFn) {
     try {
-      const module = await import('@/lib/templates/pdf-component-map');
-      getPdfComponentFn = module.getPdfComponent;
+      const pdfComponents = await import('@/lib/templates/pdf-component-map');
+      getPdfComponentFn = pdfComponents.getPdfComponent;
     } catch (error) {
       console.error('[PDF LOADER] Failed to import pdf-component-map:', error);
       throw error;

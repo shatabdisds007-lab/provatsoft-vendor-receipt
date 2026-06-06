@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { maskSecret } from './env';
 
 let _supabase: ReturnType<typeof createClient<any, any, any>> | null = null;
 

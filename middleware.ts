@@ -7,7 +7,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerUser, getCurrentUserRole } from '@/lib/auth/getCurrentUserRole';
+import { validateJwtToken } from '@/lib/tokenValidator';
+
+type MiddlewareUser = {
+  id: string;
+  email?: string;
+};
 
 // Public routes - no authentication required
 const PUBLIC_ROUTES = ['/', '/login', '/unauthorized', '/pricing', '/templates'];
@@ -21,6 +26,87 @@ const PUBLIC_API_ROUTES = [
   '/api/pdf/render',
   '/api/health/supabase',
 ];
+
+function getTokenFromRequest(request: NextRequest): string | null {
+  const authHeader = request.headers.get('authorization') || '';
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+
+  return request.cookies.get('sb-access-token')?.value || null;
+}
+
+async function getServerUser(request: NextRequest): Promise<MiddlewareUser | null> {
+  if (process.env.NODE_ENV === 'development') {
+    const devUser = request.headers.get('X-Dev-Test-User');
+    if (devUser === 'enabled') {
+      return {
+        id: request.headers.get('X-Dev-User-Id') || `dev-user-${Date.now()}`,
+        email: request.headers.get('X-Dev-User-Email') || 'dev@test.local',
+      };
+    }
+  }
+
+  const token = getTokenFromRequest(request);
+  if (!token) return null;
+
+  try {
+    const payload = await validateJwtToken(token);
+    const id = typeof payload.sub === 'string' ? payload.sub : null;
+    if (!id) return null;
+
+    return {
+      id,
+      email: typeof payload.email === 'string' ? payload.email : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getCurrentUserRole(request: NextRequest): Promise<'admin' | 'vendor' | null> {
+  const user = await getServerUser(request);
+  if (!user) return null;
+
+  if (process.env.NODE_ENV === 'development') {
+    const devRole = request.headers.get('X-Dev-User-Role');
+    if (devRole === 'admin' || devRole === 'vendor') {
+      return devRole;
+    }
+  }
+
+  if (user.id === process.env.ADMIN_USER_ID) {
+    return 'admin';
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) {
+    console.error('[middleware] Missing Supabase env for role lookup');
+    return null;
+  }
+
+  try {
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role`,
+      {
+        headers: {
+          apikey: serviceKey,
+          authorization: `Bearer ${serviceKey}`,
+        },
+      }
+    );
+
+    if (!response.ok) return null;
+
+    const profiles = (await response.json()) as Array<{ role?: 'admin' | 'vendor' }>;
+    const role = profiles[0]?.role;
+    return role === 'admin' || role === 'vendor' ? role : null;
+  } catch (error) {
+    console.error('[middleware] Role lookup failed:', error);
+    return null;
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;

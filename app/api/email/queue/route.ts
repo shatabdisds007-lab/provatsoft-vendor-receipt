@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
 import { getServerUserId } from '@/lib/auth';
 import { validateSubscriptionAction } from '@/lib/subscription';
 import { enqueueEmail } from '@/lib/emailQueue';
@@ -76,7 +77,7 @@ async function handler(request: NextRequest) {
       .single();
 
     if (emailLog.error) {
-      return NextResponse.json({ error: emailLog.error.message }, { status: 500 });
+      throw new Error(emailLog.error.message);
     }
 
     const item = await enqueueEmail({

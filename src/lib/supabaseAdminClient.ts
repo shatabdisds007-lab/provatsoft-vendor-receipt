@@ -1,16 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+import { validateSupabaseAdmin } from './env';
 
 let _supabaseAdmin: ReturnType<typeof createClient<any, any, any>> | null = null;
 
 function getSupabaseAdmin() {
   if (!_supabaseAdmin) {
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      throw new Error('Supabase service role environment variables are required.');
-    }
-    _supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+    const { url, service } = validateSupabaseAdmin();
+    _supabaseAdmin = createClient(url, service, {
       auth: {
         persistSession: false,
       },

@@ -1,5 +1,5 @@
-const React = require('react');
-import { renderPdfWithWorker } from '@/lib/pdfWorkerClient';
+import React from 'react';
+import { renderToBuffer } from '@react-pdf/renderer';
 import { getPdfComponent } from '@/lib/templates/pdf-registry';
 import { retryWithBackoff } from '@/lib/retry';
 import { logPdfGenerationEvent } from '@/services/pdfGenerationService';
@@ -15,13 +15,44 @@ export async function renderPdfBufferForTemplate(
   const templateName = key.replace(/-/g, ' ');
 
   try {
-    console.log('[renderPdfServer] start PDF generation', { key, receiptNumber: draft.receiptNumber });
+    console.log('[PDF INPUT] templateSlug:', key, 'draft:', {
+      companyName: draft.companyName,
+      branchName: draft.branchName,
+      customerName: draft.customerName,
+      amount: draft.amount,
+      totalAmount: draft.totalAmount,
+      paidAmount: draft.paidAmount,
+      date: draft.date,
+      paymentType: draft.paymentType,
+      receiptNumber: draft.receiptNumber,
+      currency: draft.currency,
+      notes: draft.notes,
+    }, 'watermarkUrl:', watermarkUrl, 'qrCodeUrl:', qrCodeUrl);
+    console.log('[PDF] generation start', { templateSlug: key, receiptNumber: draft.receiptNumber });
     const buffer = await retryWithBackoff(
       async () => {
-        console.log('[renderPdfServer] calling worker for PDF generation', { key, draft: { receiptNumber: draft.receiptNumber, companyName: draft.companyName } });
-        const pdfBuffer = await renderPdfWithWorker(draft);
-        console.log('[renderPdfServer] worker returned PDF buffer', { length: pdfBuffer.length });
-        return pdfBuffer;
+        console.log('[PDF] rendering template for', key);
+        
+        // Get the PDF component
+        const PdfComponent = getPdfComponent(key);
+        console.log('[PDF] Got component:', PdfComponent.name || 'unknown');
+        
+        try {
+          // Create element with React.createElement
+          const element = React.createElement(PdfComponent, {
+            draft,
+            watermarkUrl,
+            qrCodeUrl
+          });
+          
+          console.log('[PDF] Created element, calling renderToBuffer');
+          const pdfBuffer = await renderToBuffer(element);
+          console.log('[PDF] renderToBuffer success', { templateSlug: key, length: pdfBuffer.length });
+          return pdfBuffer;
+        } catch (renderError: any) {
+          console.error('[PDF] renderToBuffer error:', renderError?.message || renderError);
+          throw renderError;
+        }
       },
       3,
       1000,
@@ -36,29 +67,18 @@ export async function renderPdfBufferForTemplate(
       fallbackUsed: false,
     });
 
+    console.log('[PDF OUTPUT] buffer size:', buffer.length);
     return buffer;
   } catch (error: any) {
-    console.error('[renderPdfServer] PDF generation failed for', key, error?.message || error);
+    console.error('[PDF] generation failed for', key, error?.message || error);
     await logPdfGenerationEvent({
       templateSlug: key,
       templateName,
-      status: 'fallback',
+      status: 'error',
       receiptNumber: draft.receiptNumber || null,
-      fallbackUsed: true,
-      message: error?.message || 'PDF generation fell back to minimal template',
+      fallbackUsed: false,
+      message: error?.message || 'PDF generation failed',
     });
-    const fallback = await fallbackPdf(draft, watermarkUrl, qrCodeUrl, key);
-    console.log('[renderPdfServer] returning fallback buffer length', fallback?.length);
-    return fallback;
-  }
-}
-
-async function fallbackPdf(draft: ReceiptDraft, watermarkUrl?: string, qrCodeUrl?: string, key = 'minimal-modern'): Promise<Buffer> {
-  console.log('[renderPdfServer] fallbackPdf calling worker', { key });
-  try {
-    return await renderPdfWithWorker(draft);
-  } catch (err: any) {
-    console.error('[renderPdfServer] fallbackPdf worker call failed for', key, { message: err?.message, stack: err?.stack });
-    throw err;
+    throw new Error(`PDF generation failed for template ${key}: ${error?.message || 'unknown error'}`);
   }
 }

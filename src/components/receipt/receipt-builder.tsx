@@ -8,6 +8,7 @@ import { Field } from '@/components/ui/field';
 import { FileUpload } from '@/components/ui/file-upload';
 import { EducationReceiptPreview } from '@/components/receipt/education-preview';
 import { TemplateRenderer } from '@/components/templates/template-renderer';
+import { PrintPreviewWrapper } from '@/components/templates/print-preview-wrapper';
 import { PdfDocument } from '@/components/receipt/pdf-document';
 import { renderPdfBlobForTemplate } from '@/components/templates/template-pdf-renderer';
 import { currencyOptions, currencySymbols } from '@/lib/currency';
@@ -70,6 +71,7 @@ export function ReceiptBuilder() {
   const [message, setMessage] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
+  const [printRequested, setPrintRequested] = useState(false);
 
   useEffect(() => {
     async function prepareBuilder() {
@@ -256,8 +258,33 @@ export function ReceiptBuilder() {
     }
   };
 
-  const printReceipt = () => {
+  const printReceipt = async () => {
+    if (!activeTemplate) {
+      setMessage('Select a template before printing.');
+      return;
+    }
+
+    console.log('[PRINT] request for template:', activeTemplate);
+    setMessage('Preparing template for print...');
+    setPrintRequested(true);
+  };
+
+  const handlePrintReady = () => {
+    console.log('[PRINT] ready');
+    console.log('[PRINT] window.print triggered');
+
+    const cleanup = () => {
+      setPrintRequested(false);
+      setMessage('');
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    window.addEventListener('afterprint', cleanup, { once: true });
     window.print();
+
+    setTimeout(() => {
+      cleanup();
+    }, 1500);
   };
 
   return (
@@ -601,7 +628,7 @@ export function ReceiptBuilder() {
                 <p className="mt-1 text-xs uppercase tracking-[0.3em] text-slate-500">No page reload required.</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Button type="button" variant="secondary" onClick={printReceipt} className="w-full sm:w-auto">
+                <Button type="button" variant="secondary" onClick={printReceipt} className="w-full sm:w-auto" disabled={isGenerating}>
                   Print Receipt
                 </Button>
                 <Button type="button" variant="ghost" onClick={downloadPdf} className="w-full sm:w-auto">
@@ -632,6 +659,17 @@ export function ReceiptBuilder() {
             <EducationReceiptPreview draft={draft} qrCodeUrl={qrCodeUrl} />
           )}
         </section>
+      </div>
+
+      <div className="hidden print-only">
+        <PrintPreviewWrapper
+          slug={activeTemplate}
+          draft={draft}
+          qrCodeUrl={qrCodeUrl}
+          watermarkUrl={draft.watermarkUrl}
+          active={printRequested}
+          onReady={handlePrintReady}
+        />
       </div>
     </div>
   );

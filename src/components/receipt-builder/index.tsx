@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { useToast, ToastProvider } from '@/components/ui/toast';
-import { renderPdfBlobForTemplate } from '@/components/templates/template-pdf-renderer';
+import { printPdfBlob, renderPdfBlobForTemplate } from '@/components/templates/template-pdf-renderer';
 import { FormProvider, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { receiptSchema, ReceiptSchema } from '@/features/receipts/schema';
@@ -65,6 +65,23 @@ export default function ReceiptBuilderShell() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [draftApi.isDirty]);
 
+  const buildQrCodeForReceipt = async (values: ReceiptSchema) => {
+    const payload = `Receipt: ${values.receiptNumber}\nCustomer: ${values.customerName}\nAmount: ${values.currency} ${values.amount}\nDate: ${values.date}`;
+    return QRCode.toDataURL(payload, { errorCorrectionLevel: 'H' });
+  };
+
+  const renderCurrentTemplatePdf = async (values: ReceiptSchema) => {
+    const selectedTemplate = localStorage.getItem('selected_template') || 'education-branch';
+    const qrCodeUrl = await buildQrCodeForReceipt(values);
+    return renderPdfBlobForTemplate(selectedTemplate, values as any, (values as any).watermarkUrl, qrCodeUrl);
+  };
+
+  const handlePrintCurrentTemplate = async () => {
+    const values = methods.getValues();
+    const blob = await renderCurrentTemplatePdf(values);
+    printPdfBlob(blob);
+  };
+
   // keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -79,12 +96,14 @@ export default function ReceiptBuilderShell() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
         e.preventDefault();
-        window.print();
+        handlePrintCurrentTemplate().catch((err) => {
+          console.error('[ReceiptBuilderShell] template print failed', err);
+        });
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [methods, draftApi]);
+  }, [methods]);
 
   const [stepIndex, setStepIndex] = useState(0);
 
@@ -142,14 +161,13 @@ export default function ReceiptBuilderShell() {
           console.log('[ReceiptBuilderShell] selectedTemplate from localStorage:', selectedTemplate);
           if (!selectedTemplate) {
             toast({ title: 'No template selected', description: 'Choose a template from the gallery first', type: 'error' });
-            return;
+            return { blob: null, fileUrl: null, fallback: true };
           }
 
-          const payload = `Receipt: ${values.receiptNumber}\nCustomer: ${values.customerName}\nAmount: ${values.currency} ${values.amount}\nDate: ${values.date}`;
-          const qrCodeUrl = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'H' });
+          const qrCodeUrl = await buildQrCodeForReceipt(values);
 
-          console.log('[ReceiptBuilderShell] calling renderPdfBlobForTemplate with', selectedTemplate);
-          const blob = await renderPdfBlobForTemplate(selectedTemplate, values as any, (values as any).watermarkUrl, qrCodeUrl);
+          console.log('[FLOW] PDF START', { selectedTemplate });
+          const blob = await renderCurrentTemplatePdf(values);
           console.log('[ReceiptBuilderShell] blob size:', blob?.size);
           const arrayBuffer = await blob.arrayBuffer();
           const base64 = `data:application/pdf;base64,${arrayBufferToBase64(arrayBuffer)}`;
@@ -177,9 +195,13 @@ export default function ReceiptBuilderShell() {
 
           const data = await response.json();
           console.log('[ReceiptBuilderShell] /api/pdf/save response', data);
-          if (data.error) {
-            toast({ title: 'PDF Save Failed', description: data.error, type: 'error' });
-            return;
+
+          const shouldOpenLocal = !data?.fileUrl;
+          if (shouldOpenLocal) {
+            const objectUrl = URL.createObjectURL(blob);
+            window.open(objectUrl, '_blank');
+            toast({ title: 'PDF generated locally', description: 'Saved locally because server save was unavailable.', type: 'success' });
+            return { blob, fileUrl: null, fallback: true };
           }
 
           toast({ title: 'PDF Generated Successfully', type: 'success' });
@@ -187,8 +209,10 @@ export default function ReceiptBuilderShell() {
             console.log('[ReceiptBuilderShell] opening fileUrl', data.fileUrl);
             window.open(data.fileUrl, '_blank');
           }
+          return { blob, fileUrl: data.fileUrl, fallback: data.fallback || false };
         } catch (err: any) {
           toast({ title: 'PDF generation failed', description: err?.message || String(err), type: 'error' });
+          return { blob: null, fileUrl: null, fallback: true };
         }
       };
 
@@ -197,20 +221,14 @@ export default function ReceiptBuilderShell() {
           toast({ title: 'Preparing email...', type: 'info' });
           console.log('[ReceiptBuilderShell] handleSendEmail starting');
           const values = methods.getValues();
-          await handleGeneratePdf();
+          const pdfResult = await handleGeneratePdf();
 
-          const historyRes = await fetch(`/api/pdf/history?receiptNumber=${encodeURIComponent(values.receiptNumber ?? '')}`);
-          console.log('[ReceiptBuilderShell] historyRes status', historyRes.status);
-          const historyJson = await historyRes.json();
-          console.log('[ReceiptBuilderShell] historyJson', historyJson);
-          const historyRecords = historyJson.data || historyJson.receipts || [];
-          const latest = historyRecords[0] || historyJson.fileUrl || null;
-          const pdfUrl = latest?.pdf_url || latest || '';
-          if (!pdfUrl) {
-            toast({ title: 'PDF not found', description: 'Could not locate generated PDF to attach', type: 'error' });
+          if (!pdfResult?.blob) {
+            toast({ title: 'Email failed', description: 'PDF generation failed before sending email.', type: 'error' });
             return;
           }
 
+          const pdfUrl = pdfResult.fileUrl || '';
           const authHeaders = await getAuthHeaders();
           const sendRes = await fetch('/api/email/send', {
             method: 'POST',
@@ -231,7 +249,9 @@ export default function ReceiptBuilderShell() {
             return;
           }
 
-          toast({ title: 'Email queued', description: 'Email has been queued for delivery', type: 'success' });
+          const toastTitle = sendJson.mock ? 'Email mocked locally' : 'Email queued';
+          const toastDescription = sendJson.mock ? 'Email send is mocked because Supabase or email service was unavailable.' : 'Email has been queued for delivery';
+          toast({ title: toastTitle, description: toastDescription, type: 'success' });
         } catch (err: any) {
           toast({ title: 'Email failed', description: err?.message || String(err), type: 'error' });
         }
@@ -263,7 +283,14 @@ export default function ReceiptBuilderShell() {
           }}
           onGenerate={async () => await handleGeneratePdf()}
           onEmail={async () => await handleSendEmail()}
-          onPrint={() => window.print()}
+          onPrint={async () => {
+            try {
+              toast({ title: 'Preparing template for print...', type: 'info' });
+              await handlePrintCurrentTemplate();
+            } catch (err: any) {
+              toast({ title: 'Print failed', description: err?.message || String(err), type: 'error' });
+            }
+          }}
           onDuplicate={async () => await handleDuplicate()}
           rightContent={<AutosaveIndicator draftApi={draftApi} />}
         />

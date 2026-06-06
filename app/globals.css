@@ -58,3 +58,35 @@ select {
     @apply animate-pulse rounded-xl bg-slate-100;
   }
 }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  body * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+
+  .print-only,
+  .print-only * {
+    visibility: visible !important;
+    display: block !important;
+  }
+
+  .print-only {
+    position: relative !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .print-only img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

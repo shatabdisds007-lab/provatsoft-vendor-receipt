@@ -1,5 +1,10 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { validateSupabaseAtStartup } from '@/lib/supabaseStartup';
+import { AuthProvider } from '@/providers/AuthProvider';
+
+// Validate Supabase credentials at app startup
+validateSupabaseAtStartup();
 
 export const metadata: Metadata = {
   title: 'Provatsoft Receipt SaaS',
@@ -9,7 +14,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>{children}</AuthProvider>
+      </body>
     </html>
   );
 }

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdminClient';
 import { validateJwtToken } from '@/lib/tokenValidator';
+import type { UserRole, AuthUser } from '@/types/auth';
 
 export async function getTokenFromRequest(request: NextRequest) {
   const authHeader = request.headers.get('authorization') || '';
@@ -62,4 +63,80 @@ export async function isAdminUser(request: NextRequest) {
   const envAdmin = process.env.ADMIN_USER_ID;
 
   return appRole === 'admin' || userRole === 'admin' || user.id === envAdmin;
+}
+
+/**
+ * Get user profile from profiles table with role information
+ * This is the server-side method for fetching user with role
+ * @param request NextRequest object
+ * @returns User profile with role or null if not found
+ */
+export async function getServerUserProfile(request: NextRequest): Promise<AuthUser | null> {
+  const user = await getServerUser(request);
+  if (!user) return null;
+
+  // Dev mode support
+  if (process.env.NODE_ENV === 'development') {
+    const devRole = request.headers.get('X-Dev-User-Role') as UserRole | null;
+    if (devRole) {
+      return {
+        id: user.id,
+        email: user.email || 'dev@test.local',
+        role: devRole,
+      };
+    }
+  }
+
+  // Check env-based admin override
+  if (user.id === process.env.ADMIN_USER_ID) {
+    return {
+      id: user.id,
+      email: user.email || '',
+      role: 'admin',
+    };
+  }
+
+  try {
+    // Fetch profile from database with role information
+    const { data: profile, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, role')
+      .eq('id', user.id)
+      .single();
+
+    if (error || !profile) {
+      console.error('Failed to fetch user profile:', error);
+      return null;
+    }
+
+    return {
+      id: profile.id,
+      email: profile.email,
+      role: profile.role as UserRole,
+    };
+  } catch (err) {
+    console.error('Error fetching user profile:', err);
+    return null;
+  }
+}
+
+/**
+ * Get user role from profiles table
+ * @param request NextRequest object
+ * @returns User role or null if not found
+ */
+export async function getUserRole(request: NextRequest): Promise<UserRole | null> {
+  const profile = await getServerUserProfile(request);
+  return profile?.role || null;
+}
+
+/**
+ * Check if user is admin (server-side validation)
+ * Fetches role from profiles table instead of metadata
+ * @param request NextRequest object
+ * @returns true if user is admin, false otherwise
+ */
+export async function isAdmin(request: NextRequest): Promise<boolean> {
+  const role = await getUserRole(request);
+  return role === 'admin';
 }

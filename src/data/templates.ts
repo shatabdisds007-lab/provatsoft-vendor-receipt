@@ -12,6 +12,8 @@ export const receiptTemplates = [
   { id: 'government-style', name: 'Ultra Modern', category: 'government', description: 'Futuristic SaaS dashboard receipt with digital gradients and strong telemetry-style hierarchy.', enabled: true },
 ] as const;
 
+export const receiptTemplateIds = receiptTemplates.map((template) => template.id);
+
 export type ReceiptTemplateId = (typeof receiptTemplates)[number]['id'];
 export type ReceiptTemplate = {
   id: ReceiptTemplateId;

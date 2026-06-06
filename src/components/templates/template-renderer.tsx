@@ -1,9 +1,7 @@
 'use client';
 
-import React from 'react';
-import { templateRegistry } from '@/lib/templates/registry';
+import { renderReceiptTemplate } from '@/lib/renderReceiptTemplate';
 import type { ReceiptDraft } from '@/types/receipt';
-import type { ReceiptTemplateId } from '@/data/templates';
 
 interface TemplateRendererProps {
   slug: string | null;
@@ -17,16 +15,14 @@ export function TemplateRenderer({ slug, draft, qrCodeUrl, watermarkUrl }: Templ
     console.log('[TemplateRenderer] No slug provided');
     return null;
   }
-  const entry = templateRegistry[slug as ReceiptTemplateId];
-  console.log('[TemplateRenderer] Rendering slug:', slug, 'entry found:', Boolean(entry));
-  if (!entry) {
-    console.error('[TemplateRenderer] Template registry missing entry for slug:', slug);
-    return <div>Template not found</div>;
-  }
-  const Preview = entry.preview;
+
   return (
     <div>
-      <Preview draft={draft} qrCodeUrl={qrCodeUrl} watermarkUrl={draft.watermarkUrl} />
+      {renderReceiptTemplate(
+        slug,
+        { ...draft, qrCodeUrl, watermarkUrl } as any,
+        'preview',
+      )}
     </div>
   );
 }

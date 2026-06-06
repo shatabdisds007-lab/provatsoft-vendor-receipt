@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
 import { isAdminUser } from '@/lib/auth';
 import { processEmailQueue } from '@/lib/emailQueue';
 import { withApiErrorHandler } from '@/lib/apiRouteWrapper';

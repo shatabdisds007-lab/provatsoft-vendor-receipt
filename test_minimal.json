@@ -1,0 +1,14 @@
+{
+    "slug":  "minimal-modern",
+    "draft":  {
+                  "currency":  "USD",
+                  "receiptNumber":  "R-001",
+                  "totalAmount":  150,
+                  "companyName":  "Test",
+                  "customerName":  "John",
+                  "branchName":  "Branch",
+                  "date":  "2026-06-04",
+                  "paidAmount":  150,
+                  "amount":  150
+              }
+}

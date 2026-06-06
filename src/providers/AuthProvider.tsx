@@ -35,72 +35,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(true);
         setError(null);
 
-        // Get current session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        // Try to get current session
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
 
-        if (!session?.user) {
-          setUser(null);
-          setProfile(null);
-          setRole(null);
-          return;
-        }
+          if (!session?.user) {
+            setUser(null);
+            setProfile(null);
+            setRole(null);
+            return;
+          }
 
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-        });
-
-        // Fetch profile with role
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileError) {
-          setError('Failed to load profile');
-          return;
-        }
-
-        if (profileData) {
-          setProfile({
-            id: profileData.id,
-            email: profileData.email,
-            role: profileData.role,
-            created_at: profileData.created_at,
-            updated_at: profileData.updated_at,
-          });
-          setRole(profileData.role);
-        }
-      } catch (err) {
-        console.error('[AuthProvider] Load session error:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadSession();
-
-    // Subscribe to auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        if (session?.user) {
           setUser({
             id: session.user.id,
             email: session.user.email || '',
           });
 
-          // Refetch profile
-          const { data: profileData } = await supabase
+          // Fetch profile with role
+          const { data: profileData, error: profileError } = await supabase
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
             .single();
+
+          if (profileError) {
+            console.warn('[AuthProvider] Profile fetch error:', profileError);
+            setError('Failed to load profile');
+            return;
+          }
 
           if (profileData) {
             setProfile({
@@ -112,17 +76,72 @@ export function AuthProvider({ children }: AuthProviderProps) {
             });
             setRole(profileData.role);
           }
+        } catch (sessionErr) {
+          console.error('[AuthProvider] Session load error:', sessionErr);
+          // Allow app to continue even if session loading fails
+          setUser(null);
+          setProfile(null);
+          setRole(null);
         }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-        setRole(null);
+      } catch (err) {
+        console.error('[AuthProvider] Load session error:', err);
+        setError(err instanceof Error ? err.message : 'Unknown error');
+      } finally {
+        setLoading(false);
       }
-    });
-
-    return () => {
-      subscription?.unsubscribe();
     };
+
+    loadSession();
+
+    // Subscribe to auth changes with error handling
+    try {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
+        try {
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            if (session?.user) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
+
+              // Refetch profile
+              const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+
+              if (profileData) {
+                setProfile({
+                  id: profileData.id,
+                  email: profileData.email,
+                  role: profileData.role,
+                  created_at: profileData.created_at,
+                  updated_at: profileData.updated_at,
+                });
+                setRole(profileData.role);
+              }
+            }
+          } else if (event === 'SIGNED_OUT') {
+            setUser(null);
+            setProfile(null);
+            setRole(null);
+          }
+        } catch (err) {
+          console.error('[AuthProvider] Auth state change error:', err);
+        }
+      });
+
+      return () => {
+        subscription?.unsubscribe();
+      };
+    } catch (err) {
+      console.error('[AuthProvider] Auth subscription error:', err);
+      // Don't throw - allow app to continue
+      return undefined;
+    }
   }, []);
 
   /**

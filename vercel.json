@@ -1,0 +1,34 @@
+{
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": {
+      "required": true
+    },
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": {
+      "required": true
+    },
+    "SUPABASE_SERVICE_ROLE_KEY": {
+      "required": true
+    },
+    "SUPABASE_JWT_SECRET": {
+      "required": true
+    },
+    "SUPABASE_JWT_ISSUER": {
+      "required": true
+    },
+    "SUPABASE_JWT_AUD": {
+      "required": true
+    },
+    "RESEND_API_KEY": {
+      "required": true
+    },
+    "ADMIN_USER_ID": {
+      "required": false
+    }
+  }
+}

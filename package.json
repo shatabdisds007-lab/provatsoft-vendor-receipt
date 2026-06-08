@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "validate:auth": "node scripts/validate-auth-setup.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.1.0",

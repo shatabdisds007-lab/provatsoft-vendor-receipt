@@ -40,53 +40,71 @@ async function getServerUser(request: NextRequest): Promise<MiddlewareUser | nul
   if (process.env.NODE_ENV === 'development') {
     const devUser = request.headers.get('X-Dev-Test-User');
     if (devUser === 'enabled') {
+      const devUserId = request.headers.get('X-Dev-User-Id') || `dev-user-${Date.now()}`;
+      console.log('[MIDDLEWARE] Dev mode enabled for user:', devUserId);
       return {
-        id: request.headers.get('X-Dev-User-Id') || `dev-user-${Date.now()}`,
+        id: devUserId,
         email: request.headers.get('X-Dev-User-Email') || 'dev@test.local',
       };
     }
   }
 
   const token = getTokenFromRequest(request);
-  if (!token) return null;
+  if (!token) {
+    console.log('[MIDDLEWARE] No token found in request');
+    return null;
+  }
 
   try {
     const payload = await validateJwtToken(token);
     const id = typeof payload.sub === 'string' ? payload.sub : null;
-    if (!id) return null;
+    if (!id) {
+      console.log('[MIDDLEWARE] No user ID in token payload');
+      return null;
+    }
 
+    console.log('[MIDDLEWARE] Valid token found for user:', id);
     return {
       id,
       email: typeof payload.email === 'string' ? payload.email : undefined,
     };
-  } catch {
+  } catch (err) {
+    console.log('[MIDDLEWARE] Token validation failed:', err);
     return null;
   }
 }
 
 async function getCurrentUserRole(request: NextRequest): Promise<'admin' | 'vendor' | null> {
   const user = await getServerUser(request);
-  if (!user) return null;
+  if (!user) {
+    console.log('[MIDDLEWARE] No user found for role check');
+    return null;
+  }
+
+  console.log('[MIDDLEWARE] Fetching role for user:', user.id);
 
   if (process.env.NODE_ENV === 'development') {
     const devRole = request.headers.get('X-Dev-User-Role');
     if (devRole === 'admin' || devRole === 'vendor') {
+      console.log('[MIDDLEWARE] Dev mode: using role from header:', devRole);
       return devRole;
     }
   }
 
   if (user.id === process.env.ADMIN_USER_ID) {
+    console.log('[MIDDLEWARE] User is environment admin');
     return 'admin';
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) {
-    console.error('[middleware] Missing Supabase env for role lookup');
+    console.error('[MIDDLEWARE] Missing Supabase env for role lookup');
     return null;
   }
 
   try {
+    console.log('[MIDDLEWARE] Querying profiles table for role');
     const response = await fetch(
       `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=role`,
       {
@@ -97,13 +115,17 @@ async function getCurrentUserRole(request: NextRequest): Promise<'admin' | 'vend
       }
     );
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      console.error('[MIDDLEWARE] Profile query failed with status:', response.status);
+      return null;
+    }
 
     const profiles = (await response.json()) as Array<{ role?: 'admin' | 'vendor' }>;
     const role = profiles[0]?.role;
+    console.log('[MIDDLEWARE] User role from database:', role || 'NOT FOUND');
     return role === 'admin' || role === 'vendor' ? role : null;
   } catch (error) {
-    console.error('[middleware] Role lookup failed:', error);
+    console.error('[MIDDLEWARE] Role lookup failed:', error);
     return null;
   }
 }
@@ -111,6 +133,8 @@ async function getCurrentUserRole(request: NextRequest): Promise<'admin' | 'vend
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const correlationId = request.headers.get('x-correlation-id') || crypto.randomUUID();
+
+  console.log('[MIDDLEWARE] Processing request:', { pathname, correlationId });
 
   // Add correlation ID to all responses
   const setCorrelationId = (response: NextResponse) => {
@@ -120,11 +144,13 @@ export async function middleware(request: NextRequest) {
 
   // ====== PHASE 6A: Public page routes ======
   if (PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
+    console.log('[MIDDLEWARE] Public route allowed:', pathname);
     return setCorrelationId(NextResponse.next());
   }
 
   // ====== PHASE 6B: Public API routes ======
   if (PUBLIC_API_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
+    console.log('[MIDDLEWARE] Public API route allowed:', pathname);
     return setCorrelationId(NextResponse.next());
   }
 
@@ -134,6 +160,7 @@ export async function middleware(request: NextRequest) {
 
     // Unauthenticated API access
     if (!user) {
+      console.log('[MIDDLEWARE] Unauthorized API access:', pathname);
       const response = NextResponse.json(
         { error: 'Unauthorized', correlationId },
         { status: 401 }
@@ -146,6 +173,7 @@ export async function middleware(request: NextRequest) {
       const role = await getCurrentUserRole(request);
 
       if (role !== 'admin') {
+        console.log('[MIDDLEWARE] Forbidden admin API access:', { pathname, role });
         const response = NextResponse.json(
           { error: 'Forbidden - Admin access required', correlationId },
           { status: 403 }
@@ -154,6 +182,7 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    console.log('[MIDDLEWARE] Authorized API access:', pathname);
     return setCorrelationId(NextResponse.next());
   }
 
@@ -163,6 +192,7 @@ export async function middleware(request: NextRequest) {
 
     // Redirect to login if not authenticated
     if (!user) {
+      console.log('[MIDDLEWARE] Unauthenticated dashboard access, redirecting to login:', pathname);
       const response = NextResponse.redirect(new URL('/login', request.url));
       return setCorrelationId(response);
     }
@@ -173,22 +203,27 @@ export async function middleware(request: NextRequest) {
     // Admin-only dashboard routes
     if (pathname.startsWith('/dashboard/admin')) {
       if (role !== 'admin') {
+        console.log('[MIDDLEWARE] Non-admin dashboard access attempt:', { pathname, role });
         const response = NextResponse.redirect(new URL('/unauthorized', request.url));
         return setCorrelationId(response);
       }
+      console.log('[MIDDLEWARE] Admin dashboard access allowed:', pathname);
     }
 
     // Vendor dashboard (vendor + admin can access)
     if (pathname.startsWith('/dashboard/vendor')) {
       if (role !== 'vendor' && role !== 'admin') {
+        console.log('[MIDDLEWARE] Invalid role for vendor dashboard:', { pathname, role });
         const response = NextResponse.redirect(new URL('/unauthorized', request.url));
         return setCorrelationId(response);
       }
+      console.log('[MIDDLEWARE] Vendor dashboard access allowed:', { pathname, role });
     }
 
     return setCorrelationId(NextResponse.next());
   }
 
+  console.log('[MIDDLEWARE] Default route allowed:', pathname);
   return setCorrelationId(NextResponse.next());
 }
 

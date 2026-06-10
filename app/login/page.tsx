@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { setAuthSessionCookie } from '@/lib/authCookie';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -48,7 +49,11 @@ export default function AuthPage() {
 
         if (session?.user) {
           console.log('[AUTH] ✅ Existing session found for:', session.user.email);
-          
+
+          if (session.access_token) {
+            setAuthSessionCookie(session.access_token, session.expires_at);
+          }
+
           // Fetch profile for redirect
           try {
             const { data: profile, error: profileError } = await supabase
@@ -222,6 +227,25 @@ export default function AuthPage() {
         ) {
           setError('Email or password is incorrect. Please try again.');
         } else if (signInError.message?.includes('Email not confirmed')) {
+          if (process.env.NODE_ENV === 'development') {
+            await fetch('/api/auth/dev-confirm', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: trimmedEmail }),
+            });
+
+            const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({
+              email: trimmedEmail,
+              password: formData.password,
+            });
+
+            if (!retryError && retryData.session?.access_token && retryData.user) {
+              setAuthSessionCookie(retryData.session.access_token, retryData.session.expires_at);
+              await redirectToDashboard(retryData.user.id);
+              return;
+            }
+          }
+
           setError('Please verify your email address first.');
         } else if (signInError.message?.includes('User not found')) {
           setError('This email address is not registered. Please sign up first.');
@@ -247,6 +271,14 @@ export default function AuthPage() {
       console.log('[AUTH] User ID:', data.user.id);
       console.log('[AUTH] User Email:', data.user.email);
       console.log('[AUTH] Session token:', data.session?.access_token ? 'Present' : 'Missing');
+
+      if (data.session?.access_token) {
+        setAuthSessionCookie(data.session.access_token, data.session.expires_at);
+      } else {
+        setError('Login failed: Session token missing. Please try again.');
+        setLoading(false);
+        return;
+      }
 
       // Fetch or create user profile
       console.log('[AUTH] Fetching user profile...');
@@ -355,6 +387,29 @@ export default function AuthPage() {
         } else {
           console.log('[AUTH] ✅ Vendor profile created');
         }
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[AUTH] Dev mode: auto-confirming email and signing in...');
+          await fetch('/api/auth/dev-confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: data.user.id }),
+          });
+
+          const { data: signInData, error: autoSignInError } = await supabase.auth.signInWithPassword({
+            email: trimmedEmail,
+            password: formData.password,
+          });
+
+          if (!autoSignInError && signInData.session?.access_token && signInData.user) {
+            setAuthSessionCookie(signInData.session.access_token, signInData.session.expires_at);
+            console.log('[AUTH] ✅ Dev auto sign-in successful');
+            await redirectToDashboard(signInData.user.id);
+            return;
+          }
+
+          console.warn('[AUTH] Dev auto sign-in failed:', autoSignInError);
+        }
       }
 
       console.log('[AUTH] ===== SIGN UP ATTEMPT COMPLETE =====');
@@ -366,6 +421,7 @@ export default function AuthPage() {
       // Reset form
       setFormData({ email: '', password: '', confirmPassword: '' });
       setValidationErrors({});
+      setLoading(false);
 
       // Optionally switch to sign in after delay
       setTimeout(() => {

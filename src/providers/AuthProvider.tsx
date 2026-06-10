@@ -7,6 +7,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { clearAuthSessionCookie, setAuthSessionCookie } from '@/lib/authCookie';
 import type { AuthContextType, Profile, UserRole } from '@/types/auth';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,10 +43,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
           } = await supabase.auth.getSession();
 
           if (!session?.user) {
+            clearAuthSessionCookie();
             setUser(null);
             setProfile(null);
             setRole(null);
             return;
+          }
+
+          if (session.access_token) {
+            setAuthSessionCookie(session.access_token, session.expires_at);
           }
 
           setUser({
@@ -101,6 +107,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         try {
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             if (session?.user) {
+              if (session.access_token) {
+                setAuthSessionCookie(session.access_token, session.expires_at);
+              }
+
               setUser({
                 id: session.user.id,
                 email: session.user.email || '',
@@ -125,6 +135,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               }
             }
           } else if (event === 'SIGNED_OUT') {
+            clearAuthSessionCookie();
             setUser(null);
             setProfile(null);
             setRole(null);
@@ -149,6 +160,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
    */
   const signOut = async () => {
     try {
+      clearAuthSessionCookie();
       await supabase.auth.signOut();
       setUser(null);
       setProfile(null);

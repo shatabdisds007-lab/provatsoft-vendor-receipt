@@ -25,6 +25,7 @@ const PUBLIC_API_ROUTES = [
   '/api/email/webhook',
   '/api/pdf/render',
   '/api/health/supabase',
+  '/api/auth/dev-confirm',
 ];
 
 function getTokenFromRequest(request: NextRequest): string | null {

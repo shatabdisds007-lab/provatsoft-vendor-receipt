@@ -13,8 +13,8 @@ export default function HomePage() {
             Build premium education, corporate, tuition and admission receipts with branded PDFs, email delivery, and admin/vendor workflows.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
-            <Link href="/login" className="rounded-2xl bg-sky-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-400">
-              Sign In
+            <Link href="/dashboard/vendor" className="rounded-2xl bg-sky-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-sky-400">
+              Open Dashboard
             </Link>
             <Link href="/dashboard/vendor" className="rounded-2xl border border-slate-700 bg-slate-800 px-6 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-700">
               Vendor Dashboard

@@ -1,5 +1,8 @@
 'use client';
 
+import React from 'react';
+import { pdf } from '@react-pdf/renderer';
+import { getPdfComponent } from '@/lib/templates/pdf-component-map';
 import type { ReceiptDraft } from '@/types/receipt';
 
 export async function renderPdfBlobForTemplate(slug: string | null, draft: ReceiptDraft, watermarkUrl?: string, qrCodeUrl?: string) {
@@ -15,22 +18,29 @@ export async function renderPdfBlobForTemplate(slug: string | null, draft: Recei
     let payload: any = null;
     const contentType = response.headers.get('content-type');
     try {
-      payload = await response.json();
+      payload = contentType?.includes('application/json') ? await response.json() : await response.text();
     } catch (e) {
-      try {
-        payload = await response.text();
-      } catch (e2) {
-        payload = null;
-      }
+      payload = null;
     }
 
     console.error('[template-pdf-renderer] server PDF render failed', { key, status: response.status, contentType, payload });
-    throw new Error((payload && payload.error) || `Server PDF render failed with status ${response.status}`);
+    return renderPdfBlobInBrowser(key, draft, watermarkUrl, qrCodeUrl);
   }
 
   const blob = await response.blob();
   console.log('[template-pdf-renderer] server PDF blob generated', { key, size: blob.size });
   return blob;
+}
+
+async function renderPdfBlobInBrowser(key: string, draft: ReceiptDraft, watermarkUrl?: string, qrCodeUrl?: string) {
+  const PdfComponent = getPdfComponent(key);
+  if (!PdfComponent) {
+    throw new Error(`No PDF component found for template ${key}`);
+  }
+
+  console.warn('[template-pdf-renderer] using browser PDF fallback', { key });
+  const element = React.createElement(PdfComponent, { draft, watermarkUrl, qrCodeUrl });
+  return pdf(element).toBlob();
 }
 
 export function printPdfBlob(blob: Blob) {

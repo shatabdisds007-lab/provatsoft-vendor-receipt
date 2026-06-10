@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import type { ReceiptDraft } from '@/types/receipt';
 import { receiptEntityToDraft } from '@/types/receipt';
 
@@ -94,9 +93,7 @@ function saveStoredDraft(draft: ReceiptDraft, receiptId?: string) {
 }
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return {};
 }
 
 export function useReceiptDraft() {
@@ -109,9 +106,6 @@ export function useReceiptDraft() {
   const syncDraftToServer = useCallback(async (value: ReceiptDraft, existingId?: string) => {
     if (typeof window === 'undefined') return;
     const headers = await getAuthHeaders();
-    if (!headers || Object.keys(headers).length === 0) {
-      return;
-    }
 
     const url = existingId ? `/api/receipts/${existingId}` : '/api/receipts';
     const method = existingId ? 'PUT' : 'POST';
@@ -185,15 +179,13 @@ export function useReceiptDraft() {
     try {
       if (receiptId) {
         const headers = await getAuthHeaders();
-        if (headers && Object.keys(headers).length) {
-          await fetch(`/api/receipts/${receiptId}`, {
-            method: 'DELETE',
-            headers: {
-              'Content-Type': 'application/json',
-              ...headers,
-            },
-          });
-        }
+        await fetch(`/api/receipts/${receiptId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            ...headers,
+          },
+        });
       }
     } catch (error) {
       console.error('Failed to delete server draft', error);
@@ -217,9 +209,6 @@ export function useReceiptDraft() {
 
     const hydrate = async () => {
       const headers = await getAuthHeaders();
-      if (!headers || Object.keys(headers).length === 0) {
-        return;
-      }
 
       try {
         const response = await fetch('/api/receipts?status=draft&latest=true', {

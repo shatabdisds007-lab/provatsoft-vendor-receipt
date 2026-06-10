@@ -12,7 +12,6 @@ import { PrintPreviewWrapper } from '@/components/templates/print-preview-wrappe
 import { PdfDocument } from '@/components/receipt/pdf-document';
 import { renderPdfBlobForTemplate } from '@/components/templates/template-pdf-renderer';
 import { currencyOptions, currencySymbols } from '@/lib/currency';
-import { supabase } from '@/lib/supabaseClient';
 import type { ReceiptDraft } from '@/types/receipt';
 
 const defaultDraft: ReceiptDraft = {
@@ -75,9 +74,7 @@ export function ReceiptBuilder() {
 
   useEffect(() => {
     async function prepareBuilder() {
-      const user = await supabase.auth.getUser();
-      const userId = user.data.user?.id || '';
-      setDraft((current) => ({ ...current, vendorId: userId }));
+      setDraft((current) => ({ ...current, vendorId: '00000000-0000-0000-0000-000000000000' }));
 
       try {
         const response = await fetch('/api/receipt-number');
@@ -178,17 +175,10 @@ export function ReceiptBuilder() {
   };
 
   const getAuthHeaders = async () => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return {};
   };
 
   const savePdfToStorage = async () => {
-    if (!draft.vendorId) {
-      setMessage('Vendor session not found. Please sign in.');
-      return;
-    }
-
     if (!activeTemplate) {
       setMessage('Select a template before saving the receipt.');
       return;

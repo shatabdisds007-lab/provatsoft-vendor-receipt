@@ -1,14 +1,15 @@
-/**
- * PHASE 5: SESSION PROVIDER
- * Client-side auth context and hook for accessing user profile and role
- */
-
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { clearAuthSessionCookie, setAuthSessionCookie } from '@/lib/authCookie';
+import React, { createContext, useContext } from 'react';
 import type { AuthContextType, Profile, UserRole } from '@/types/auth';
+
+export const PUBLIC_USER_ID = '00000000-0000-0000-0000-000000000000';
+
+const publicProfile: Profile = {
+  id: PUBLIC_USER_ID,
+  email: 'public@provatsoft.local',
+  role: 'admin',
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -16,183 +17,19 @@ export interface AuthProviderProps {
   children: React.ReactNode;
 }
 
-/**
- * AuthProvider: Wraps app with session and profile tracking
- * Usage: Wrap your app in <AuthProvider> at the layout level
- */
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<{ id: string; email: string } | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [role, setRole] = useState<UserRole | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  /**
-   * Load user session and profile on mount
-   */
-  useEffect(() => {
-    const loadSession = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Try to get current session
-        try {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-
-          if (!session?.user) {
-            clearAuthSessionCookie();
-            setUser(null);
-            setProfile(null);
-            setRole(null);
-            return;
-          }
-
-          if (session.access_token) {
-            setAuthSessionCookie(session.access_token, session.expires_at);
-          }
-
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-          });
-
-          // Fetch profile with role
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          if (profileError) {
-            console.warn('[AuthProvider] Profile fetch error:', profileError);
-            setError('Failed to load profile');
-            return;
-          }
-
-          if (profileData) {
-            setProfile({
-              id: profileData.id,
-              email: profileData.email,
-              role: profileData.role,
-              created_at: profileData.created_at,
-              updated_at: profileData.updated_at,
-            });
-            setRole(profileData.role);
-          }
-        } catch (sessionErr) {
-          console.error('[AuthProvider] Session load error:', sessionErr);
-          // Allow app to continue even if session loading fails
-          setUser(null);
-          setProfile(null);
-          setRole(null);
-        }
-      } catch (err) {
-        console.error('[AuthProvider] Load session error:', err);
-        setError(err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadSession();
-
-    // Subscribe to auth changes with error handling
-    try {
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
-        try {
-          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            if (session?.user) {
-              if (session.access_token) {
-                setAuthSessionCookie(session.access_token, session.expires_at);
-              }
-
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-              });
-
-              // Refetch profile
-              const { data: profileData } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-
-              if (profileData) {
-                setProfile({
-                  id: profileData.id,
-                  email: profileData.email,
-                  role: profileData.role,
-                  created_at: profileData.created_at,
-                  updated_at: profileData.updated_at,
-                });
-                setRole(profileData.role);
-              }
-            }
-          } else if (event === 'SIGNED_OUT') {
-            clearAuthSessionCookie();
-            setUser(null);
-            setProfile(null);
-            setRole(null);
-          }
-        } catch (err) {
-          console.error('[AuthProvider] Auth state change error:', err);
-        }
-      });
-
-      return () => {
-        subscription?.unsubscribe();
-      };
-    } catch (err) {
-      console.error('[AuthProvider] Auth subscription error:', err);
-      // Don't throw - allow app to continue
-      return undefined;
-    }
-  }, []);
-
-  /**
-   * Sign out handler
-   */
-  const signOut = async () => {
-    try {
-      clearAuthSessionCookie();
-      await supabase.auth.signOut();
-      setUser(null);
-      setProfile(null);
-      setRole(null);
-    } catch (err) {
-      console.error('[AuthProvider] Sign out error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to sign out');
-    }
-  };
-
   const value: AuthContextType = {
-    user: user && role ? { ...user, role } : null,
-    profile,
-    role,
-    loading,
-    error,
-    signOut,
+    user: publicProfile,
+    profile: publicProfile,
+    role: publicProfile.role,
+    loading: false,
+    error: null,
+    signOut: async () => undefined,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/**
- * useAuth hook
- * Access current user, profile, and role in any client component
- *
- * Usage:
- * ```
- * const { user, profile, role, loading } = useAuth();
- * if (role === 'admin') { ... }
- * ```
- */
 export function useAuth(): AuthContextType {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -201,18 +38,10 @@ export function useAuth(): AuthContextType {
   return context;
 }
 
-/**
- * Hook for checking if user is admin
- */
 export function useIsAdmin(): boolean {
-  const { role, loading } = useAuth();
-  return !loading && role === 'admin';
+  return true;
 }
 
-/**
- * Hook for checking if user is vendor
- */
 export function useIsVendor(): boolean {
-  const { role, loading } = useAuth();
-  return !loading && (role === 'vendor' || role === 'admin');
+  return true;
 }

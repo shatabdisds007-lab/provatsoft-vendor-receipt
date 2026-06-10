@@ -1,5 +1,6 @@
 import React from 'react';
-import { renderToBuffer } from '@react-pdf/renderer';
+// v4 API: renderToBuffer was replaced by pdf(element).toBuffer()
+import { pdf } from '@react-pdf/renderer';
 import { getPdfComponent } from '@/lib/templates/pdf-registry';
 import { retryWithBackoff } from '@/lib/retry';
 import { logPdfGenerationEvent } from '@/services/pdfGenerationService';
@@ -29,28 +30,23 @@ export async function renderPdfBufferForTemplate(
       notes: draft.notes,
     }, 'watermarkUrl:', watermarkUrl, 'qrCodeUrl:', qrCodeUrl);
     console.log('[PDF] generation start', { templateSlug: key, receiptNumber: draft.receiptNumber });
+
     const buffer = await retryWithBackoff(
       async () => {
         console.log('[PDF] rendering template for', key);
-        
-        // Get the PDF component
+
         const PdfComponent = getPdfComponent(key);
         console.log('[PDF] Got component:', PdfComponent.name || 'unknown');
-        
+
         try {
-          // Create element with React.createElement
-          const element = React.createElement(PdfComponent, {
-            draft,
-            watermarkUrl,
-            qrCodeUrl
-          });
-          
-          console.log('[PDF] Created element, calling renderToBuffer');
-          const pdfBuffer = await renderToBuffer(element);
-          console.log('[PDF] renderToBuffer success', { templateSlug: key, length: pdfBuffer.length });
+          // Use v4 pdf(element).toBuffer() — renderToBuffer was removed in v4
+          const element = React.createElement(PdfComponent, { draft, watermarkUrl, qrCodeUrl });
+          console.log('[PDF] Created element, calling pdf().toBuffer()');
+          const pdfBuffer = await pdf(element).toBuffer();
+          console.log('[PDF] pdf().toBuffer() success', { templateSlug: key, length: pdfBuffer.length });
           return pdfBuffer;
         } catch (renderError: any) {
-          console.error('[PDF] renderToBuffer error:', renderError?.message || renderError);
+          console.error('[PDF] pdf().toBuffer() error:', renderError?.message || renderError);
           throw renderError;
         }
       },
@@ -82,3 +78,4 @@ export async function renderPdfBufferForTemplate(
     throw new Error(`PDF generation failed for template ${key}: ${error?.message || 'unknown error'}`);
   }
 }
+
